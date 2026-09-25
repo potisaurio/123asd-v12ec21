@@ -1,5 +1,25 @@
 import React, { useState, useEffect } from 'react';
 
+// --- DATOS BASADOS EN D&D 5E REGLAS BÁSICAS ---
+// Razas Básicas
+const RACES = {
+  elfo_alto: { name: 'Alto Elfo', speed: 30, size: 'Medio', statMods: { dex: 2, int: 1 } },
+  elfo_bosques: { name: 'Elfo de los Bosques', speed: 35, size: 'Medio', statMods: { dex: 2, wis: 1 } },
+  enano_colinas: { name: 'Enano de las Colinas', speed: 25, size: 'Medio', statMods: { con: 2, wis: 1 }, hpBonus: 1 },
+  enano_montaña: { name: 'Enano de la Montaña', speed: 25, size: 'Medio', statMods: { con: 2, str: 2 } },
+  humano: { name: 'Humano', speed: 30, size: 'Medio', statMods: { str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 } },
+  mediano_piesligeros: { name: 'Mediano Piesligeros', speed: 25, size: 'Pequeño', statMods: { dex: 2, cha: 1 } },
+  mediano_fornido: { name: 'Mediano Fornido', speed: 25, size: 'Pequeño', statMods: { dex: 2, con: 1 } },
+};
+
+// Clases Básicas
+const CLASSES = {
+  clerigo: { name: 'Clérigo', hitDie: 8, saves: ['wis', 'cha'], mainStat: 'wis' },
+  guerrero: { name: 'Guerrero', hitDie: 10, saves: ['str', 'con'], mainStat: 'str' },
+  picaro: { name: 'Pícaro', hitDie: 8, saves: ['dex', 'int'], mainStat: 'dex' },
+  mago: { name: 'Mago', hitDie: 6, saves: ['int', 'wis'], mainStat: 'int' },
+};
+
 // --- CONFIGURACIÓN DE ESTADÍSTICAS ---
 const STATS_COL_1 = [
   { id: 'str', name: 'FUERZA', skills: [{ id: 'athletics', name: 'Atletismo' }] },
@@ -27,12 +47,13 @@ const THEMES = {
 
 const DEFAULT_CHAR = {
   id: '', name: 'Nuevo Personaje', theme: 'amber',
-  class: '', subclass: '', level: 1, background: '', species: '', xp: 0,
+  classKey: '', raceKey: '', level: 1, background: '', xp: 0,
   size: 'Med', speed: 30, initiative: 0, passivePerception: 10, profBonus: 2, heroicInspiration: false,
   hp: { current: 10, max: 10, temp: 0 },
   hitDice: { value: '1d8', spent: 0 },
   deathSaves: { successes: 0, failures: 0 },
   ac: 10, shield: 0,
+  baseStats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
   stats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
   saves: { str: false, dex: false, con: false, int: false, wis: false, cha: false },
   skills: ALL_STATS.reduce((acc, stat) => {
@@ -49,7 +70,7 @@ const DEFAULT_CHAR = {
   traits: { class: '', species: '', feats: '' },
   flavor: { appearance: '', backstory: '', languages: '', alignment: '' },
   inventory: { gear: '', attunement: '', coins: { pc: 0, pp: 0, pe: 0, po: 0, ppt: 0 } },
-  notes: '' // Nuevo campo para la pestaña Diario
+  notes: ''
 };
 
 export default function App() {
@@ -59,19 +80,20 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('ESTADÍSTICAS');
   const [initiativeTracker, setInitiativeTracker] = useState([]);
 
+  // Variables para el Modal de Creación
+  const [showCreator, setShowCreator] = useState(false);
+  const [newChar, setNewChar] = useState({ name: '', raceKey: '', classKey: '' });
+
   useEffect(() => {
-    const saved = localStorage.getItem('dnd_party_data_v3');
+    const saved = localStorage.getItem('dnd_party_data_auto');
     if (saved) setCharacters(JSON.parse(saved));
-    else {
-      const initialChars = Array.from({ length: 7 }, (_, i) => ({ ...DEFAULT_CHAR, id: `char_${i + 1}`, name: `Personaje ${i + 1}` }));
-      setCharacters(initialChars);
-    }
   }, []);
 
   useEffect(() => {
-    if (characters.length > 0) localStorage.setItem('dnd_party_data_v3', JSON.stringify(characters));
+    localStorage.setItem('dnd_party_data_auto', JSON.stringify(characters));
   }, [characters]);
 
+  // Funciones Matemáticas
   const getMod = (score) => Math.floor((score - 10) / 2);
   const getModFormatted = (score) => { const m = getMod(score); return m >= 0 ? `+${m}` : m; };
 
@@ -80,7 +102,55 @@ export default function App() {
   };
 
   const activeChar = characters.find(c => c.id === activeCharId) || DEFAULT_CHAR;
-  const t = THEMES[activeChar.theme] || THEMES['amber']; // Tema actual del jugador
+  const t = THEMES[activeChar.theme] || THEMES['amber']; 
+  const currentProfBonus = parseInt(activeChar.profBonus) || 0;
+
+  // --- AUTOMATIZACIÓN DE CREACIÓN DE PERSONAJE ---
+  const handleCreateCharacter = () => {
+    if (!newChar.name || !newChar.raceKey || !newChar.classKey) return;
+
+    const raceData = RACES[newChar.raceKey];
+    const classData = CLASSES[newChar.classKey];
+    
+    // Aplicar bonificadores raciales a estadísticas base (10 por defecto)
+    let newStats = { ...DEFAULT_CHAR.baseStats };
+    if (raceData.statMods) {
+      Object.keys(raceData.statMods).forEach(stat => {
+        newStats[stat] += raceData.statMods[stat];
+      });
+    }
+
+    // Calcular Vida Nivel 1 (Dado + Mod. Constitución)
+    const conMod = getMod(newStats.con);
+    let startHp = classData.hitDie + conMod;
+    if (raceData.hpBonus) startHp += raceData.hpBonus; // Bono Enano de las Colinas
+
+    // Asignar Salvaciones Automáticas de Clase
+    let newSaves = { ...DEFAULT_CHAR.saves };
+    classData.saves.forEach(save => newSaves[save] = true);
+
+    const generatedChar = {
+      ...DEFAULT_CHAR,
+      id: `char_${Date.now()}`,
+      name: newChar.name,
+      raceKey: newChar.raceKey,
+      species: raceData.name,
+      classKey: newChar.classKey,
+      class: classData.name,
+      speed: raceData.speed,
+      size: raceData.size,
+      baseStats: newStats,
+      stats: newStats,
+      hp: { current: startHp, max: startHp, temp: 0 },
+      hitDice: { value: `1d${classData.hitDie}`, spent: 0 },
+      saves: newSaves,
+      magic: { ...DEFAULT_CHAR.magic, ability: classData.mainStat.toUpperCase() }
+    };
+
+    setCharacters([...characters, generatedChar]);
+    setShowCreator(false);
+    setNewChar({ name: '', raceKey: '', classKey: '' });
+  };
 
   // --- VISTA: INICIO ---
   if (view === 'HOME') {
@@ -106,19 +176,24 @@ export default function App() {
   // --- VISTA: SELECCIÓN DE PERSONAJE ---
   if (view === 'PLAYER_SELECT') {
     return (
-      <div className="min-h-screen bg-slate-950 p-6 md:p-12">
+      <div className="min-h-screen bg-slate-950 p-6 md:p-12 relative">
         <button onClick={() => setView('HOME')} className="text-slate-400 hover:text-white mb-8 font-bold flex items-center gap-2">← Volver al Menú</button>
-        <h2 className="text-3xl font-bold text-slate-100 mb-8 border-b border-slate-800 pb-4">Selecciona tu Personaje</h2>
+        
+        <div className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
+          <h2 className="text-3xl font-bold text-slate-100">Tus Personajes</h2>
+          <button onClick={() => setShowCreator(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg">+ Crear Personaje</button>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {characters.map((char) => {
             const charTheme = THEMES[char.theme || 'amber'];
             return (
               <button key={char.id} onClick={() => { setActiveCharId(char.id); setView('SHEET'); }} 
-                className="bg-slate-900 p-6 rounded-2xl border-2 border-slate-800 text-left transition-all hover:-translate-y-1 shadow-lg flex flex-col"
-                style={{ borderColor: char.id === activeCharId ? charTheme.hex : '' }}
+                className="bg-slate-900 p-6 rounded-2xl border-2 border-slate-800 text-left transition-all hover:-translate-y-1 shadow-lg flex flex-col group relative"
               >
+                <div className={`absolute inset-0 bg-gradient-to-t from-${charTheme.hex} to-transparent opacity-0 group-hover:opacity-10 rounded-2xl transition-opacity`}></div>
                 <h3 className={`text-xl font-black ${charTheme.text}`}>{char.name}</h3>
-                <p className="text-slate-400 text-sm mt-1">{char.class || 'Clase'} Nvl {char.level}</p>
+                <p className="text-slate-400 text-sm mt-1">{char.species} {char.class} Nvl {char.level}</p>
                 <div className="mt-auto pt-4 flex gap-2">
                   <span className="text-xs bg-slate-950 text-slate-300 px-2 py-1 rounded-md font-bold">CA: {char.ac}</span>
                   <span className="text-xs bg-slate-950 text-slate-300 px-2 py-1 rounded-md font-bold">HP: {char.hp.current}</span>
@@ -127,6 +202,47 @@ export default function App() {
             )
           })}
         </div>
+
+        {/* MODAL CREADOR DE PERSONAJE */}
+        {showCreator && (
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 p-8 rounded-3xl border border-slate-700 shadow-2xl w-full max-w-md">
+              <h2 className="text-2xl font-black text-indigo-400 mb-6">Creación Rápida</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 block mb-1">Nombre</label>
+                  <input type="text" value={newChar.name} onChange={e => setNewChar({...newChar, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-3 rounded-xl text-white focus:border-indigo-500 focus:outline-none" placeholder="Nombre de tu héroe" />
+                </div>
+                
+                <div>
+                  <label className="text-xs font-bold text-slate-400 block mb-1">Raza</label>
+                  <select value={newChar.raceKey} onChange={e => setNewChar({...newChar, raceKey: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-3 rounded-xl text-white focus:border-indigo-500 focus:outline-none appearance-none">
+                    <option value="">Selecciona Raza...</option>
+                    {Object.entries(RACES).map(([key, race]) => (
+                      <option key={key} value={key}>{race.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 block mb-1">Clase</label>
+                  <select value={newChar.classKey} onChange={e => setNewChar({...newChar, classKey: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-3 rounded-xl text-white focus:border-indigo-500 focus:outline-none appearance-none">
+                    <option value="">Selecciona Clase...</option>
+                    {Object.entries(CLASSES).map(([key, cls]) => (
+                      <option key={key} value={key}>{cls.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-4 mt-8">
+                <button onClick={() => setShowCreator(false)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors">Cancelar</button>
+                <button onClick={handleCreateCharacter} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50" disabled={!newChar.name || !newChar.raceKey || !newChar.classKey}>Forjar Destino</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -199,32 +315,48 @@ export default function App() {
     );
   }
 
-  // --- VISTA: FICHA DEL JUGADOR (Editable e Intuitiva) ---
+  // --- VISTA: FICHA DEL JUGADOR ---
   const renderStatBlock = (statsArray) => (
     <div className="space-y-4">
-      {statsArray.map(stat => (
-        <div key={stat.id} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 shadow-sm">
-          <div className={`p-3 rounded-xl border ${t.border} flex flex-col items-center w-24 bg-slate-950`}>
-            <span className="text-[10px] text-slate-500 font-black mb-1">{stat.name}</span>
-            <input type="number" value={activeChar.stats[stat.id]} onChange={(e) => updateActiveChar({ stats: { ...activeChar.stats, [stat.id]: parseInt(e.target.value) || 0 } })} className={`w-full text-center bg-transparent text-2xl font-black ${t.text} focus:outline-none hover:bg-slate-900 rounded transition-colors`} />
-            <div className="bg-slate-800/50 w-full text-center rounded text-sm font-bold text-slate-300 mt-2 py-0.5">{getModFormatted(activeChar.stats[stat.id])}</div>
-          </div>
-          <div className="flex-1 flex flex-col justify-center">
-            <label className="flex items-center gap-3 text-sm font-bold text-slate-200 cursor-pointer mb-2 border-b border-slate-800/50 pb-2 hover:bg-slate-800/30 p-1 rounded transition-colors">
-              <input type="checkbox" checked={activeChar.saves[stat.id]} onChange={() => updateActiveChar({ saves: { ...activeChar.saves, [stat.id]: !activeChar.saves[stat.id] } })} className={`w-4 h-4 ${t.accent} cursor-pointer rounded`} />
-              Tirada de Salvación
-            </label>
-            <div className="space-y-1">
-              {stat.skills.map(skill => (
-                <label key={skill.id} className="flex items-center gap-3 text-xs text-slate-400 cursor-pointer hover:bg-slate-800/30 p-1 rounded transition-colors">
-                  <input type="checkbox" checked={activeChar.skills[skill.id].prof} onChange={() => updateActiveChar({ skills: { ...activeChar.skills, [skill.id]: { ...activeChar.skills[skill.id], prof: !activeChar.skills[skill.id].prof } } })} className={`w-3.5 h-3.5 ${t.accent} cursor-pointer rounded-sm`} />
-                  <span className={activeChar.skills[skill.id].prof ? 'text-slate-200 font-bold' : ''}>{skill.name}</span>
-                </label>
-              ))}
+      {statsArray.map(stat => {
+        const statScore = activeChar.stats[stat.id];
+        const statMod = getMod(statScore);
+        const isProfSave = activeChar.saves[stat.id];
+        const totalSave = statMod + (isProfSave ? currentProfBonus : 0);
+        const formatSave = totalSave >= 0 ? `+${totalSave}` : totalSave;
+
+        return (
+          <div key={stat.id} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 shadow-sm">
+            <div className={`p-3 rounded-xl border ${t.border} flex flex-col items-center w-24 bg-slate-950`}>
+              <span className="text-[10px] text-slate-500 font-black mb-1">{stat.name}</span>
+              <input type="number" value={statScore} onChange={(e) => updateActiveChar({ stats: { ...activeChar.stats, [stat.id]: parseInt(e.target.value) || 0 } })} className={`w-full text-center bg-transparent text-2xl font-black ${t.text} focus:outline-none hover:bg-slate-900 rounded transition-colors`} />
+              <div className="bg-slate-800/50 w-full text-center rounded text-sm font-bold text-slate-300 mt-2 py-0.5">{getModFormatted(statScore)}</div>
+            </div>
+            <div className="flex-1 flex flex-col justify-center">
+              <label className="flex items-center gap-3 text-sm font-bold text-slate-200 cursor-pointer mb-2 border-b border-slate-800/50 pb-2 hover:bg-slate-800/30 p-1 rounded transition-colors">
+                <input type="checkbox" checked={isProfSave} onChange={() => updateActiveChar({ saves: { ...activeChar.saves, [stat.id]: !isProfSave } })} className={`w-4 h-4 ${t.accent} cursor-pointer rounded`} />
+                <span className={`w-6 text-center text-lg font-mono ${isProfSave ? t.text : 'text-slate-400'}`}>{formatSave}</span>
+                Tirada de Salvación
+              </label>
+              <div className="space-y-1">
+                {stat.skills.map(skill => {
+                  const isProfSkill = activeChar.skills[skill.id].prof;
+                  const totalSkill = statMod + (isProfSkill ? currentProfBonus : 0);
+                  const formatSkill = totalSkill >= 0 ? `+${totalSkill}` : totalSkill;
+
+                  return (
+                    <label key={skill.id} className="flex items-center gap-3 text-xs text-slate-400 cursor-pointer hover:bg-slate-800/30 p-1 rounded transition-colors">
+                      <input type="checkbox" checked={isProfSkill} onChange={() => updateActiveChar({ skills: { ...activeChar.skills, [skill.id]: { ...activeChar.skills[skill.id], prof: !isProfSkill } } })} className={`w-3.5 h-3.5 ${t.accent} cursor-pointer rounded-sm`} />
+                      <span className={`w-6 text-center font-mono text-sm ${isProfSkill ? t.text : 'text-slate-500'}`}>{formatSkill}</span>
+                      <span className={isProfSkill ? 'text-slate-200 font-bold' : ''}>{skill.name}</span>
+                    </label>
+                  )
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   );
 
@@ -232,10 +364,9 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 p-2 md:p-6 font-sans">
       <div className="max-w-5xl mx-auto space-y-6">
         
-        {/* Cabecera Principal (Personalización + Info) */}
+        {/* Cabecera Principal */}
         <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl relative">
           <div className="flex justify-between items-start mb-4">
-            {/* Selector de Color */}
             <div className="flex gap-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
               {Object.entries(THEMES).map(([key, themeObj]) => (
                 <button 
@@ -270,7 +401,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Pestañas de Navegación Intuitivas */}
+        {/* Pestañas de Navegación */}
         <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
           {[
             { id: 'ESTADÍSTICAS', icon: '🎲' },
@@ -288,13 +419,10 @@ export default function App() {
             </button>
           ))}
         </div>
-
-        {/* --- CONTENIDO DE LAS PESTAÑAS --- */}
         
         {/* PESTAÑA 1: ESTADÍSTICAS */}
         {activeTab === 'ESTADÍSTICAS' && (
           <div className="space-y-6">
-            {/* Bloque Superior de Atributos Secundarios */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3 bg-slate-900 p-4 rounded-2xl border border-slate-800">
               {[
                 { label: 'Competencia', key: 'profBonus', ph: '+2' }, { label: 'Iniciativa', key: 'initiative', ph: '+0' },
@@ -311,7 +439,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Dos Columnas de Estadísticas Principales */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {renderStatBlock(STATS_COL_1)}
               {renderStatBlock(STATS_COL_2)}
@@ -322,7 +449,6 @@ export default function App() {
         {/* PESTAÑA 2: COMBATE */}
         {activeTab === 'COMBATE' && (
           <div className="space-y-6">
-            {/* Vida y Armadura */}
             <div className="flex flex-col md:flex-row gap-6">
               
               <div className="flex gap-4 md:w-1/3 bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-sm items-center justify-center">
@@ -361,7 +487,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Ataques */}
             <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-sm uppercase text-slate-300 font-black">Armas y Trucos de Daño</h3>
@@ -464,7 +589,7 @@ export default function App() {
           </div>
         )}
 
-        {/* PESTAÑA 5: DIARIO (Nueva) */}
+        {/* PESTAÑA 5: DIARIO */}
         {activeTab === 'DIARIO' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 bg-slate-900 p-6 rounded-3xl border border-slate-800 flex flex-col h-[600px] shadow-sm">

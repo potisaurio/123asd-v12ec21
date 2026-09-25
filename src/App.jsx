@@ -1,72 +1,65 @@
 import React, { useState, useEffect } from 'react';
 
-// --- CONSTANTES D&D 5E ---
-const STATS = [
-  { id: 'str', name: 'FUE', full: 'Fuerza' },
-  { id: 'dex', name: 'DES', full: 'Destreza' },
-  { id: 'con', name: 'CON', full: 'Constitución' },
-  { id: 'int', name: 'INT', full: 'Inteligencia' },
-  { id: 'wis', name: 'SAB', full: 'Sabiduría' },
-  { id: 'cha', name: 'CAR', full: 'Carisma' }
-];
-
-const SKILLS = [
-  { id: 'acrobatics', name: 'Acrobacias', stat: 'dex' },
-  { id: 'animalHandling', name: 'Trato c/ Animales', stat: 'wis' },
-  { id: 'arcana', name: 'Arcano', stat: 'int' },
-  { id: 'athletics', name: 'Atletismo', stat: 'str' },
-  { id: 'deception', name: 'Engaño', stat: 'cha' },
-  { id: 'history', name: 'Historia', stat: 'int' },
-  { id: 'insight', name: 'Perspicacia', stat: 'wis' },
-  { id: 'intimidation', name: 'Intimidación', stat: 'cha' },
-  { id: 'investigation', name: 'Investigación', stat: 'int' },
-  { id: 'medicine', name: 'Medicina', stat: 'wis' },
-  { id: 'nature', name: 'Naturaleza', stat: 'int' },
-  { id: 'perception', name: 'Percepción', stat: 'wis' },
-  { id: 'performance', name: 'Interpretación', stat: 'cha' },
-  { id: 'persuasion', name: 'Persuasión', stat: 'cha' },
-  { id: 'religion', name: 'Religión', stat: 'int' },
-  { id: 'sleightOfHand', name: 'Juego de Manos', stat: 'dex' },
-  { id: 'stealth', name: 'Sigilo', stat: 'dex' },
-  { id: 'survival', name: 'Supervivencia', stat: 'wis' }
+// --- ESTRUCTURA DE ATRIBUTOS Y HABILIDADES (Basado en D&D 2024) ---
+const STATS_CONFIG = [
+  { id: 'str', name: 'FUERZA', skills: [{ id: 'athletics', name: 'Atletismo' }] },
+  { id: 'dex', name: 'DESTREZA', skills: [{ id: 'acrobatics', name: 'Acrobacias' }, { id: 'sleightOfHand', name: 'Juego de manos' }, { id: 'stealth', name: 'Sigilo' }] },
+  { id: 'con', name: 'CONSTITUCIÓN', skills: [] },
+  { id: 'int', name: 'INTELIGENCIA', skills: [{ id: 'arcana', name: 'Conocimiento arcano' }, { id: 'history', name: 'Historia' }, { id: 'investigation', name: 'Investigación' }, { id: 'nature', name: 'Naturaleza' }, { id: 'religion', name: 'Religión' }] },
+  { id: 'wis', name: 'SABIDURÍA', skills: [{ id: 'animalHandling', name: 'Trato con animales' }, { id: 'medicine', name: 'Medicina' }, { id: 'perception', name: 'Percepción' }, { id: 'insight', name: 'Perspicacia' }, { id: 'survival', name: 'Supervivencia' }] },
+  { id: 'cha', name: 'CARISMA', skills: [{ id: 'deception', name: 'Engaño' }, { id: 'intimidation', name: 'Intimidación' }, { id: 'performance', name: 'Interpretación' }, { id: 'persuasion', name: 'Persuasión' }] }
 ];
 
 const DEFAULT_CHAR = {
-  id: '', name: 'Nuevo Personaje', race: '', class: '', level: 1, alignment: '', background: '',
+  id: '', name: 'Nuevo Personaje',
+  class: '', subclass: '', level: 1, background: '', species: '', alignment: '', xp: 0,
+  size: 'Mediano', speed: 30, initiative: 0, passivePerception: 10, profBonus: 2, heroicInspiration: false,
   hp: { current: 10, max: 10, temp: 0 },
-  ac: 10, speed: 30, initiative: 0,
+  hitDice: { value: '1d8', spent: 0, max: 1 },
+  deathSaves: { successes: 0, failures: 0 },
+  ac: 10, shield: 0,
   stats: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
   saves: { str: false, dex: false, con: false, int: false, wis: false, cha: false },
-  skills: SKILLS.reduce((acc, skill) => ({ ...acc, [skill.id]: { prof: false, exp: false } }), {}),
-  deathSaves: { successes: 0, failures: 0 },
-  attacks: '', inventory: '', features: ''
+  skills: STATS_CONFIG.reduce((acc, stat) => {
+    stat.skills.forEach(skill => acc[skill.id] = { prof: false, exp: false });
+    return acc;
+  }, {}),
+  proficiencies: {
+    armor: { light: false, medium: false, heavy: false, shields: false },
+    weapons: '', tools: ''
+  },
+  attacks: [{ name: '', atk: '', dmg: '', notes: '' }],
+  magic: {
+    ability: 'INT', mod: 0, saveDC: 10, atkBonus: 0,
+    slots: Array(9).fill({ total: 0, spent: 0 }),
+    spells: [{ level: 0, name: '', castTime: '', range: '', c: false, r: false, m: false, notes: '' }]
+  },
+  traits: { class: '', species: '', feats: '' },
+  flavor: { appearance: '', backstory: '', languages: '' },
+  inventory: { gear: '', attunement: '', coins: { pc: 0, pp: 0, pe: 0, po: 0, ppt: 0 } }
 };
 
 export default function App() {
-  const [view, setView] = useState('HOME'); // HOME, PLAYER_SELECT, SHEET, DM_DASHBOARD
+  const [view, setView] = useState('HOME'); 
   const [characters, setCharacters] = useState([]);
   const [activeCharId, setActiveCharId] = useState(null);
+  const [activeTab, setActiveTab] = useState('PRINCIPAL');
   const [initiativeTracker, setInitiativeTracker] = useState([]);
 
-  // Cargar datos locales (Simulando la Base de Datos)
   useEffect(() => {
-    const saved = localStorage.getItem('dnd_party_data');
+    const saved = localStorage.getItem('dnd2024_party_data');
     if (saved) setCharacters(JSON.parse(saved));
     else {
-      // Generar 7 slots vacíos por defecto
       const initialChars = Array.from({ length: 7 }, (_, i) => ({ ...DEFAULT_CHAR, id: `char_${i + 1}`, name: `Personaje ${i + 1}` }));
       setCharacters(initialChars);
     }
   }, []);
 
-  // Guardar cada vez que hay cambios
   useEffect(() => {
-    if (characters.length > 0) localStorage.setItem('dnd_party_data', JSON.stringify(characters));
+    if (characters.length > 0) localStorage.setItem('dnd2024_party_data', JSON.stringify(characters));
   }, [characters]);
 
-  // Funciones Matemáticas 5e
   const getMod = (score) => Math.floor((score - 10) / 2);
-  const getProfBonus = (level) => Math.ceil(level / 4) + 1;
   const getModFormatted = (score) => { const m = getMod(score); return m >= 0 ? `+${m}` : m; };
 
   const updateActiveChar = (updates) => {
@@ -78,20 +71,18 @@ export default function App() {
   // --- VISTAS SECUNDARIAS ---
   if (view === 'HOME') {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 font-sans">
         <h1 className="text-5xl font-black text-amber-500 mb-12 text-center drop-shadow-lg">CRÓNICAS DE DISCORD</h1>
         <div className="flex flex-col md:flex-row gap-6 w-full max-w-2xl">
-          <button onClick={() => setView('PLAYER_SELECT')} className="flex-1 bg-slate-900 border border-slate-700 hover:border-amber-500 hover:scale-105 transition-all p-10 rounded-2xl group relative overflow-hidden">
-            <div className="absolute inset-0 bg-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <button onClick={() => setView('PLAYER_SELECT')} className="flex-1 bg-slate-900 border border-slate-700 hover:border-amber-500 transition-all p-10 rounded-2xl group">
             <span className="text-6xl block mb-4">🗡️</span>
             <h2 className="text-2xl font-bold text-slate-100">Soy Jugador</h2>
-            <p className="text-slate-400 mt-2">Accede a tu ficha de personaje interactiva.</p>
+            <p className="text-slate-400 mt-2">Accede a tu ficha D&D 2024.</p>
           </button>
-          <button onClick={() => setView('DM_DASHBOARD')} className="flex-1 bg-slate-900 border border-slate-700 hover:border-rose-500 hover:scale-105 transition-all p-10 rounded-2xl group relative overflow-hidden">
-            <div className="absolute inset-0 bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <button onClick={() => setView('DM_DASHBOARD')} className="flex-1 bg-slate-900 border border-slate-700 hover:border-rose-500 transition-all p-10 rounded-2xl group">
             <span className="text-6xl block mb-4">👁️</span>
             <h2 className="text-2xl font-bold text-slate-100">Dungeon Master</h2>
-            <p className="text-slate-400 mt-2">Panel de control, iniciativas y visión global.</p>
+            <p className="text-slate-400 mt-2">Panel global e iniciativas.</p>
           </button>
         </div>
       </div>
@@ -100,7 +91,7 @@ export default function App() {
 
   if (view === 'PLAYER_SELECT') {
     return (
-      <div className="min-h-screen bg-slate-950 p-8">
+      <div className="min-h-screen bg-slate-950 p-8 font-sans">
         <button onClick={() => setView('HOME')} className="text-slate-400 hover:text-white mb-8">← Volver al Inicio</button>
         <h2 className="text-3xl font-bold text-amber-500 mb-8 text-center">Selecciona tu Personaje</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
@@ -121,14 +112,12 @@ export default function App() {
 
   if (view === 'DM_DASHBOARD') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+      <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-black text-rose-500">Pantalla del Dungeon Master</h1>
           <button onClick={() => setView('HOME')} className="bg-slate-800 px-4 py-2 rounded">Salir</button>
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Panel Izquierdo: Party */}
           <div className="lg:col-span-2 space-y-4">
             <h2 className="text-xl font-bold text-slate-300 border-b border-slate-800 pb-2">El Grupo (Party)</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -138,26 +127,23 @@ export default function App() {
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-bold text-lg text-amber-500">{char.name}</h3>
-                      <p className="text-xs text-slate-400">{char.race} {char.class}</p>
+                      <p className="text-xs text-slate-400">{char.species} {char.class}</p>
                     </div>
                     <span className="bg-slate-950 px-3 py-1 rounded-lg text-sm font-bold border border-slate-700">CA: {char.ac}</span>
                   </div>
-                  
-                  {/* Barra de Vida DM */}
                   <div>
                     <div className="flex justify-between text-xs mb-1">
-                      <span>HP</span>
+                      <span>HP (Temp: {char.hp.temp})</span>
                       <span className={char.hp.current <= 0 ? 'text-rose-500 font-bold' : ''}>{char.hp.current} / {char.hp.max}</span>
                     </div>
                     <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
                       <div className="bg-emerald-500 h-full transition-all" style={{ width: `${Math.max(0, (char.hp.current / char.hp.max) * 100)}%` }}></div>
                     </div>
                   </div>
-
                   <div className="grid grid-cols-3 gap-2 text-center text-xs mt-2">
                     <div className="bg-slate-950 py-1 rounded border border-slate-800">
-                      <span className="block text-slate-500">Percepción</span>
-                      <span className="font-bold">{10 + getMod(char.stats.wis) + (char.skills.perception.prof ? getProfBonus(char.level) : 0)}</span>
+                      <span className="block text-slate-500">P. Pasiva</span>
+                      <span className="font-bold">{char.passivePerception}</span>
                     </div>
                     <div className="bg-slate-950 py-1 rounded border border-slate-800">
                       <span className="block text-slate-500">Iniciativa</span>
@@ -172,11 +158,8 @@ export default function App() {
               ))}
             </div>
           </div>
-
-          {/* Panel Derecho: Iniciativa */}
           <div className="bg-slate-900 p-6 rounded-xl border border-slate-800">
-            <h2 className="text-xl font-bold text-amber-500 border-b border-slate-700 pb-2 mb-4">Combate</h2>
-            <p className="text-sm text-slate-400 mb-4">Utiliza esto junto a las tiradas que hagan en Discord para ordenar los turnos.</p>
+            <h2 className="text-xl font-bold text-amber-500 border-b border-slate-700 pb-2 mb-4">Iniciativa</h2>
             <div className="space-y-2 mb-4">
               {initiativeTracker.sort((a, b) => b.roll - a.roll).map((entity, i) => (
                 <div key={i} className="flex justify-between items-center bg-slate-950 p-3 rounded border border-slate-700">
@@ -201,221 +184,346 @@ export default function App() {
     );
   }
 
-  // --- VISTA PRINCIPAL: FICHA DEL JUGADOR ---
-  const profBonus = getProfBonus(activeChar.level);
+  // --- VISTA PRINCIPAL: FICHA DEL JUGADOR 2024 ---
+  const handleStatChange = (stat, value) => updateActiveChar({ stats: { ...activeChar.stats, [stat]: parseInt(value) || 0 } });
+  const handleSkillChange = (skillId) => updateActiveChar({ skills: { ...activeChar.skills, [skillId]: { ...activeChar.skills[skillId], prof: !activeChar.skills[skillId].prof } } });
+  const handleSaveChange = (stat) => updateActiveChar({ saves: { ...activeChar.saves, [stat]: !activeChar.saves[stat] } });
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-2 md:p-6 font-sans">
       <div className="max-w-6xl mx-auto space-y-4">
         
-        {/* HEADER: INFO BÁSICA */}
-        <div className="bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-800 flex flex-col md:flex-row gap-6 items-start">
-          <button onClick={() => setView('PLAYER_SELECT')} className="absolute top-4 right-4 text-slate-500 hover:text-white">🚪 Salir</button>
-          
-          <div className="w-full md:w-1/3">
-            <input 
-              type="text" value={activeChar.name} 
-              onChange={(e) => updateActiveChar({ name: e.target.value })}
-              className="w-full bg-transparent text-3xl font-black text-amber-500 border-b-2 border-transparent hover:border-slate-700 focus:border-amber-500 outline-none transition-colors"
-              placeholder="Nombre del Personaje"
-            />
-          </div>
-          
-          <div className="w-full md:w-2/3 grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-950 p-4 rounded-lg border border-slate-800">
-            {[
-              { label: 'Clase', key: 'class' },
-              { label: 'Nivel', key: 'level', type: 'number' },
-              { label: 'Raza', key: 'race' },
-              { label: 'Trasfondo', key: 'background' }
-            ].map(field => (
-              <div key={field.key}>
-                <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold block">{field.label}</label>
-                <input 
-                  type={field.type || 'text'} 
-                  value={activeChar[field.key]}
-                  onChange={(e) => updateActiveChar({ [field.key]: field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value })}
-                  className="w-full bg-transparent text-sm font-bold text-slate-200 border-b border-slate-700 focus:border-amber-500 outline-none"
-                />
-              </div>
-            ))}
+        {/* HEADER: INFO BÁSICA (Bloque Superior D&D 2024) */}
+        <div className="bg-slate-900 p-4 md:p-6 rounded-xl border border-slate-800 relative">
+          <button onClick={() => setView('PLAYER_SELECT')} className="absolute top-4 right-4 text-slate-500 hover:text-white text-sm">🚪 Salir</button>
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="w-full md:w-1/3">
+              <label className="text-[10px] uppercase text-slate-500 font-bold block">Nombre del Personaje</label>
+              <input type="text" value={activeChar.name} onChange={(e) => updateActiveChar({ name: e.target.value })} className="w-full bg-transparent text-3xl font-black text-amber-500 border-b-2 border-slate-700 focus:border-amber-500 outline-none" />
+            </div>
+            <div className="w-full md:w-2/3 grid grid-cols-3 md:grid-cols-6 gap-3">
+              {[
+                { label: 'Nivel', key: 'level', type: 'number' },
+                { label: 'Clase', key: 'class' },
+                { label: 'Subclase', key: 'subclass' },
+                { label: 'Trasfondo', key: 'background' },
+                { label: 'Especie', key: 'species' },
+                { label: 'PX', key: 'xp', type: 'number' }
+              ].map(field => (
+                <div key={field.key}>
+                  <label className="text-[10px] uppercase text-slate-500 font-bold block truncate">{field.label}</label>
+                  <input type={field.type || 'text'} value={activeChar[field.key]} onChange={(e) => updateActiveChar({ [field.key]: field.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value })} className="w-full bg-transparent text-sm font-bold border-b border-slate-700 focus:border-amber-500 outline-none" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* CONTENIDO PRINCIPAL: 3 COLUMNAS EN DESKTOP */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-          
-          {/* COLUMNA 1: ESTADÍSTICAS Y HABILIDADES (Span 3) */}
-          <div className="md:col-span-3 space-y-4">
-            {/* Atributos Principales */}
-            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 grid grid-cols-2 gap-3">
-              {STATS.map(stat => (
-                <div key={stat.id} className="bg-slate-950 p-2 rounded-lg border border-slate-800 flex flex-col items-center">
-                  <span className="text-xs text-slate-500 font-bold">{stat.name}</span>
-                  <input 
-                    type="number" 
-                    value={activeChar.stats[stat.id]}
-                    onChange={(e) => updateActiveChar({ stats: { ...activeChar.stats, [stat.id]: parseInt(e.target.value) || 0 } })}
-                    className="w-12 text-center bg-transparent text-xl font-black text-white focus:outline-none focus:text-amber-500"
-                  />
-                  <div className="mt-1 bg-slate-900 px-3 py-0.5 rounded-full text-xs font-bold text-slate-300 shadow-inner">
-                    {getModFormatted(activeChar.stats[stat.id])}
+        {/* NAVEGACIÓN POR PESTAÑAS */}
+        <div className="flex gap-2 overflow-x-auto pb-2 border-b border-slate-800">
+          {['PRINCIPAL', 'COMBATE Y MAGIA', 'RASGOS', 'INVENTARIO'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 font-bold text-sm rounded-t-lg transition-colors whitespace-nowrap ${activeTab === tab ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}>
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* TAB 1: PRINCIPAL (Estadísticas, Vida, Habilidades) */}
+        {activeTab === 'PRINCIPAL' && (
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            
+            {/* Columna Izquierda: Atributos y Habilidades D&D 2024 */}
+            <div className="md:col-span-4 space-y-4">
+              {STATS_CONFIG.map(stat => (
+                <div key={stat.id} className="bg-slate-900 p-3 rounded-xl border border-slate-800 shadow-sm">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="bg-slate-950 p-2 rounded-lg border border-slate-700 flex flex-col items-center w-20">
+                      <span className="text-[10px] text-slate-500 font-bold">{stat.name}</span>
+                      <input type="number" value={activeChar.stats[stat.id]} onChange={(e) => handleStatChange(stat.id, e.target.value)} className="w-full text-center bg-transparent text-xl font-black text-white focus:outline-none" />
+                      <div className="bg-slate-800 w-full text-center rounded-sm text-xs font-bold text-amber-500 mt-1">{getModFormatted(activeChar.stats[stat.id])}</div>
+                    </div>
+                    <div className="flex-1">
+                      <label className="flex items-center gap-2 text-sm font-bold text-slate-200 cursor-pointer">
+                        <input type="checkbox" checked={activeChar.saves[stat.id]} onChange={() => handleSaveChange(stat.id)} className="accent-amber-500" />
+                        Tirada de salvación
+                      </label>
+                      <div className="mt-1 space-y-1">
+                        {stat.skills.map(skill => (
+                          <label key={skill.id} className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer hover:text-slate-200">
+                            <input type="checkbox" checked={activeChar.skills[skill.id].prof} onChange={() => handleSkillChange(skill.id)} className="accent-amber-500" />
+                            {skill.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Habilidades (Skills) */}
+            {/* Columna Derecha: Combate, Vida y Bloque Central */}
+            <div className="md:col-span-8 space-y-4">
+              {/* Bloque Superior de Combate */}
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-wrap gap-4 justify-between items-center">
+                <div className="text-center">
+                  <span className="block text-[10px] text-slate-500 font-bold">C. ARMADURA</span>
+                  <input type="number" value={activeChar.ac} onChange={(e) => updateActiveChar({ ac: e.target.value })} className="w-16 bg-transparent text-3xl font-black text-center focus:outline-none" />
+                </div>
+                <div className="text-center border-l border-slate-800 pl-4">
+                  <span className="block text-[10px] text-slate-500 font-bold">ESCUDO</span>
+                  <input type="number" value={activeChar.shield} onChange={(e) => updateActiveChar({ shield: e.target.value })} className="w-12 bg-transparent text-xl font-bold text-center focus:outline-none" placeholder="+2"/>
+                </div>
+                <div className="text-center border-l border-slate-800 pl-4">
+                  <label className="flex flex-col items-center gap-1 cursor-pointer">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">Inspiración Heróica</span>
+                    <input type="checkbox" checked={activeChar.heroicInspiration} onChange={() => updateActiveChar({ heroicInspiration: !activeChar.heroicInspiration })} className="w-6 h-6 accent-amber-500" />
+                  </label>
+                </div>
+              </div>
+
+              {/* Puntos de Golpe y Dados */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                  <h3 className="text-[10px] uppercase text-slate-500 font-bold mb-2">Puntos de Golpe</h3>
+                  <div className="flex justify-between items-end mb-2">
+                    <div className="flex items-baseline gap-1">
+                      <input type="number" value={activeChar.hp.current} onChange={(e) => updateActiveChar({ hp: { ...activeChar.hp, current: e.target.value } })} className="w-16 bg-transparent text-4xl font-black text-emerald-500 focus:outline-none text-right" />
+                      <span className="text-slate-500">/</span>
+                      <input type="number" value={activeChar.hp.max} onChange={(e) => updateActiveChar({ hp: { ...activeChar.hp, max: e.target.value } })} className="w-12 bg-transparent text-xl font-bold text-slate-400 focus:outline-none" />
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-[10px] text-slate-500 font-bold">TEMP</span>
+                      <input type="number" value={activeChar.hp.temp} onChange={(e) => updateActiveChar({ hp: { ...activeChar.hp, temp: e.target.value } })} className="w-12 bg-slate-950 border border-slate-700 text-amber-500 text-lg font-bold text-center rounded focus:outline-none" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <button onClick={() => updateActiveChar({ hp: { ...activeChar.hp, current: Math.max(0, parseInt(activeChar.hp.current) - 1) } })} className="flex-1 bg-rose-900/40 text-rose-400 py-1 rounded font-bold">-1</button>
+                    <button onClick={() => updateActiveChar({ hp: { ...activeChar.hp, current: Math.min(activeChar.hp.max, parseInt(activeChar.hp.current) + 1) } })} className="flex-1 bg-emerald-900/40 text-emerald-400 py-1 rounded font-bold">+1</button>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+                  <div className="flex justify-between">
+                    <div>
+                      <h3 className="text-[10px] uppercase text-slate-500 font-bold">Dados de Golpe</h3>
+                      <div className="flex gap-2 items-center mt-1">
+                        <input type="text" value={activeChar.hitDice.value} onChange={(e) => updateActiveChar({ hitDice: { ...activeChar.hitDice, value: e.target.value } })} className="w-12 bg-transparent text-xl font-bold border-b border-slate-700 focus:outline-none" placeholder="1d8"/>
+                        <span className="text-xs text-slate-500">Gastados:</span>
+                        <input type="number" value={activeChar.hitDice.spent} onChange={(e) => updateActiveChar({ hitDice: { ...activeChar.hitDice, spent: e.target.value } })} className="w-10 bg-slate-950 text-center rounded border border-slate-700 focus:outline-none" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 border-t border-slate-800 pt-2">
+                    <h3 className="text-[10px] uppercase text-slate-500 font-bold mb-1">T.S. Contra Muerte</h3>
+                    <div className="flex justify-between items-center">
+                      <div className="flex gap-1 items-center"><span className="text-[10px] text-emerald-500">ÉXITOS</span>{[1,2,3].map(i => <input type="checkbox" key={`succ_${i}`} checked={activeChar.deathSaves.successes >= i} onChange={() => updateActiveChar({ deathSaves: { ...activeChar.deathSaves, successes: activeChar.deathSaves.successes === i ? i-1 : i } })} className="accent-emerald-500"/>)}</div>
+                      <div className="flex gap-1 items-center"><span className="text-[10px] text-rose-500">FALLOS</span>{[1,2,3].map(i => <input type="checkbox" key={`fail_${i}`} checked={activeChar.deathSaves.failures >= i} onChange={() => updateActiveChar({ deathSaves: { ...activeChar.deathSaves, failures: activeChar.deathSaves.failures === i ? i-1 : i } })} className="accent-rose-500"/>)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bloque Central D&D 2024 */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {[
+                  { label: 'Bonif. Competencia', key: 'profBonus', type: 'number' },
+                  { label: 'Iniciativa', key: 'initiative', type: 'number' },
+                  { label: 'Velocidad', key: 'speed', type: 'number' },
+                  { label: 'Tamaño', key: 'size', type: 'text' },
+                  { label: 'Percepción Pasiva', key: 'passivePerception', type: 'number' }
+                ].map(item => (
+                  <div key={item.key} className="bg-slate-900 p-2 rounded-lg border border-slate-800 text-center">
+                    <span className="block text-[9px] uppercase text-slate-500 font-bold mb-1 h-6">{item.label}</span>
+                    <input type={item.type} value={activeChar[item.key]} onChange={(e) => updateActiveChar({ [item.key]: item.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value })} className="w-full bg-transparent text-xl font-bold text-center focus:outline-none" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: COMBATE Y MAGIA */}
+        {activeTab === 'COMBATE Y MAGIA' && (
+          <div className="space-y-4">
             <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-              <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
-                <h3 className="font-bold text-slate-300">Habilidades</h3>
-                <span className="text-xs bg-amber-500/20 text-amber-500 px-2 py-1 rounded font-bold">Bono Prof. +{profBonus}</span>
-              </div>
-              <div className="space-y-2 h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                {SKILLS.map(skill => {
-                  const isProf = activeChar.skills[skill.id].prof;
-                  const statMod = getMod(activeChar.stats[skill.stat]);
-                  const total = statMod + (isProf ? profBonus : 0);
-                  
-                  return (
-                    <div key={skill.id} className="flex items-center gap-3 text-sm group hover:bg-slate-950 p-1 rounded">
-                      <button 
-                        onClick={() => updateActiveChar({ skills: { ...activeChar.skills, [skill.id]: { ...activeChar.skills[skill.id], prof: !isProf } } })}
-                        className={`w-4 h-4 rounded-full border-2 transition-colors ${isProf ? 'bg-amber-500 border-amber-500' : 'border-slate-600 group-hover:border-slate-400'}`}
-                      ></button>
-                      <span className="w-8 text-center font-mono font-bold text-slate-300">{total >= 0 ? `+${total}` : total}</span>
-                      <span className="flex-1 text-slate-400 group-hover:text-slate-200 truncate">{skill.name} <span className="text-[9px] text-slate-600 uppercase">({skill.stat})</span></span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* COLUMNA 2: COMBATE Y VIDA (Span 5) */}
-          <div className="md:col-span-5 space-y-4">
-            
-            {/* Top Stats de Combate */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col items-center justify-center">
-                <span className="text-[10px] text-slate-500 font-bold uppercase mb-1">C. Armadura</span>
-                <input type="number" value={activeChar.ac} onChange={(e) => updateActiveChar({ ac: e.target.value })} className="bg-transparent text-3xl font-black text-center w-full focus:outline-none" />
-              </div>
-              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col items-center justify-center">
-                <span className="text-[10px] text-slate-500 font-bold uppercase mb-1">Iniciativa</span>
-                <span className="text-3xl font-black text-slate-300">{getModFormatted(activeChar.stats.dex)}</span>
-              </div>
-              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col items-center justify-center">
-                <span className="text-[10px] text-slate-500 font-bold uppercase mb-1">Velocidad</span>
-                <input type="number" value={activeChar.speed} onChange={(e) => updateActiveChar({ speed: e.target.value })} className="bg-transparent text-3xl font-black text-center w-full focus:outline-none" />
-              </div>
-            </div>
-
-            {/* Componente de Vida (HP) Avanzado */}
-            <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-lg relative overflow-hidden">
-              <div className="flex justify-between items-end mb-4">
-                <div>
-                  <h3 className="text-xs uppercase text-slate-500 font-bold tracking-wider">Puntos de Golpe</h3>
-                  <div className="flex items-baseline gap-2">
-                    <input 
-                      type="number" value={activeChar.hp.current} 
-                      onChange={(e) => updateActiveChar({ hp: { ...activeChar.hp, current: e.target.value } })}
-                      className={`bg-transparent text-6xl font-black focus:outline-none w-24 ${activeChar.hp.current <= 0 ? 'text-rose-500' : 'text-emerald-500'}`} 
-                    />
-                    <span className="text-2xl text-slate-500">/</span>
-                    <input 
-                      type="number" value={activeChar.hp.max} 
-                      onChange={(e) => updateActiveChar({ hp: { ...activeChar.hp, max: e.target.value } })}
-                      className="bg-transparent text-2xl font-bold text-slate-400 focus:outline-none w-16" 
-                    />
+              <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Armas y Trucos de Daño</h3>
+              <div className="space-y-2">
+                <div className="grid grid-cols-12 gap-2 text-[10px] text-slate-500 font-bold uppercase px-2">
+                  <div className="col-span-3">Nombre</div>
+                  <div className="col-span-2 text-center">Bonif. Atq/CD</div>
+                  <div className="col-span-3">Daño y Tipo</div>
+                  <div className="col-span-4">Notas</div>
+                </div>
+                {activeChar.attacks.map((atk, index) => (
+                  <div key={index} className="grid grid-cols-12 gap-2 bg-slate-950 p-2 rounded border border-slate-800">
+                    <input type="text" value={atk.name} onChange={(e) => { const newAtks = [...activeChar.attacks]; newAtks[index].name = e.target.value; updateActiveChar({ attacks: newAtks }); }} className="col-span-3 bg-transparent text-sm focus:outline-none" placeholder="Cimitarra" />
+                    <input type="text" value={atk.atk} onChange={(e) => { const newAtks = [...activeChar.attacks]; newAtks[index].atk = e.target.value; updateActiveChar({ attacks: newAtks }); }} className="col-span-2 bg-transparent text-sm text-center focus:outline-none" placeholder="+4" />
+                    <input type="text" value={atk.dmg} onChange={(e) => { const newAtks = [...activeChar.attacks]; newAtks[index].dmg = e.target.value; updateActiveChar({ attacks: newAtks }); }} className="col-span-3 bg-transparent text-sm focus:outline-none" placeholder="1d6+2 Cortante" />
+                    <input type="text" value={atk.notes} onChange={(e) => { const newAtks = [...activeChar.attacks]; newAtks[index].notes = e.target.value; updateActiveChar({ attacks: newAtks }); }} className="col-span-4 bg-transparent text-sm focus:outline-none" placeholder="Sutil" />
                   </div>
-                </div>
-                <div className="text-right">
-                  <h3 className="text-xs uppercase text-slate-500 font-bold tracking-wider mb-1">HP Temp</h3>
-                  <input 
-                    type="number" value={activeChar.hp.temp} 
-                    onChange={(e) => updateActiveChar({ hp: { ...activeChar.hp, temp: e.target.value } })}
-                    className="bg-slate-950 border border-slate-700 text-amber-500 text-xl font-bold text-center w-16 rounded p-1 focus:outline-none" 
-                  />
-                </div>
+                ))}
+                <button onClick={() => updateActiveChar({ attacks: [...activeChar.attacks, { name: '', atk: '', dmg: '', notes: '' }] })} className="text-xs text-amber-500 hover:text-amber-400 mt-2">+ Añadir Ataque</button>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+              <h3 className="text-sm uppercase text-amber-500 font-bold mb-4">Aptitud Mágica y Conjuros</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                {[
+                  { label: 'Aptitud Mágica', key: 'ability', type: 'text', ph: 'INT/SAB/CAR' },
+                  { label: 'Modificador', key: 'mod', type: 'number' },
+                  { label: 'CD de Salvación', key: 'saveDC', type: 'number' },
+                  { label: 'Bonif. Ataque', key: 'atkBonus', type: 'number' }
+                ].map(item => (
+                  <div key={item.key} className="bg-slate-950 p-2 rounded-lg border border-slate-800 text-center">
+                    <span className="block text-[10px] uppercase text-slate-500 font-bold mb-1">{item.label}</span>
+                    <input type={item.type} value={activeChar.magic[item.key]} onChange={(e) => updateActiveChar({ magic: { ...activeChar.magic, [item.key]: item.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value } })} placeholder={item.ph} className="w-full bg-transparent text-xl font-bold text-center focus:outline-none" />
+                  </div>
+                ))}
               </div>
 
-              {/* Botones de Salud */}
-              <div className="flex gap-2 mb-4">
-                <button onClick={() => updateActiveChar({ hp: { ...activeChar.hp, current: Math.max(0, parseInt(activeChar.hp.current) - 1) } })} className="flex-1 bg-rose-900/40 hover:bg-rose-900/60 text-rose-400 py-2 rounded-lg font-bold transition-colors">-1 Daño</button>
-                <button onClick={() => updateActiveChar({ hp: { ...activeChar.hp, current: Math.min(activeChar.hp.max, parseInt(activeChar.hp.current) + 1) } })} className="flex-1 bg-emerald-900/40 hover:bg-emerald-900/60 text-emerald-400 py-2 rounded-lg font-bold transition-colors">+1 Curar</button>
-              </div>
-
-              {/* Utilidades de Descanso y Muerte */}
-              <div className="grid grid-cols-2 gap-4 border-t border-slate-800 pt-4 mt-2">
-                <div>
-                  <h4 className="text-[10px] text-slate-500 font-bold uppercase mb-2">Salvaciones de Muerte</h4>
-                  <div className="flex gap-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[9px] text-emerald-500">ÉXITO</span>
-                      <div className="flex gap-1">
-                        {[1, 2, 3].map(i => (
-                          <button key={`succ_${i}`} onClick={() => {
-                              const curr = activeChar.deathSaves.successes;
-                              updateActiveChar({ deathSaves: { ...activeChar.deathSaves, successes: curr === i ? i-1 : i }})
-                            }}
-                            className={`w-4 h-4 rounded-full border border-emerald-700 ${activeChar.deathSaves.successes >= i ? 'bg-emerald-500' : 'bg-transparent'}`}
-                          ></button>
-                        ))}
+              <div className="mb-4">
+                <span className="block text-[10px] uppercase text-slate-500 font-bold mb-2">Espacios de Conjuro (Total / Gastados)</span>
+                <div className="grid grid-cols-3 md:grid-cols-9 gap-2">
+                  {activeChar.magic.slots.map((slot, i) => (
+                    <div key={i} className="bg-slate-950 p-1 rounded border border-slate-800 text-center">
+                      <span className="block text-[9px] text-slate-500">Nivel {i+1}</span>
+                      <div className="flex items-center justify-center gap-1">
+                        <input type="number" value={slot.total} onChange={(e) => { const newSlots = [...activeChar.magic.slots]; newSlots[i].total = parseInt(e.target.value)||0; updateActiveChar({ magic: { ...activeChar.magic, slots: newSlots } }); }} className="w-6 bg-transparent text-sm text-right focus:outline-none" />
+                        <span className="text-slate-600">/</span>
+                        <input type="number" value={slot.spent} onChange={(e) => { const newSlots = [...activeChar.magic.slots]; newSlots[i].spent = parseInt(e.target.value)||0; updateActiveChar({ magic: { ...activeChar.magic, slots: newSlots } }); }} className="w-6 bg-transparent text-sm text-amber-500 focus:outline-none" />
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[9px] text-rose-500">FALLO</span>
-                      <div className="flex gap-1">
-                        {[1, 2, 3].map(i => (
-                           <button key={`fail_${i}`} onClick={() => {
-                              const curr = activeChar.deathSaves.failures;
-                              updateActiveChar({ deathSaves: { ...activeChar.deathSaves, failures: curr === i ? i-1 : i }})
-                            }}
-                            className={`w-4 h-4 rounded-full border border-rose-700 ${activeChar.deathSaves.failures >= i ? 'bg-rose-500' : 'bg-transparent'}`}
-                          ></button>
-                        ))}
-                      </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="grid grid-cols-12 gap-2 text-[10px] text-slate-500 font-bold uppercase px-2">
+                  <div className="col-span-1">Nivel</div>
+                  <div className="col-span-3">Nombre</div>
+                  <div className="col-span-2">Tiempo</div>
+                  <div className="col-span-2">Alcance</div>
+                  <div className="col-span-1 text-center">C R M</div>
+                  <div className="col-span-3">Notas</div>
+                </div>
+                {activeChar.magic.spells.map((spell, index) => (
+                  <div key={index} className="grid grid-cols-12 gap-2 bg-slate-950 p-2 rounded border border-slate-800 items-center">
+                    <input type="number" value={spell.level} onChange={(e) => { const newSpells = [...activeChar.magic.spells]; newSpells[index].level = parseInt(e.target.value)||0; updateActiveChar({ magic: { ...activeChar.magic, spells: newSpells } }); }} className="col-span-1 bg-transparent text-sm text-center focus:outline-none" />
+                    <input type="text" value={spell.name} onChange={(e) => { const newSpells = [...activeChar.magic.spells]; newSpells[index].name = e.target.value; updateActiveChar({ magic: { ...activeChar.magic, spells: newSpells } }); }} className="col-span-3 bg-transparent text-sm focus:outline-none" placeholder="Bola de fuego" />
+                    <input type="text" value={spell.castTime} onChange={(e) => { const newSpells = [...activeChar.magic.spells]; newSpells[index].castTime = e.target.value; updateActiveChar({ magic: { ...activeChar.magic, spells: newSpells } }); }} className="col-span-2 bg-transparent text-sm focus:outline-none" placeholder="1 Acción" />
+                    <input type="text" value={spell.range} onChange={(e) => { const newSpells = [...activeChar.magic.spells]; newSpells[index].range = e.target.value; updateActiveChar({ magic: { ...activeChar.magic, spells: newSpells } }); }} className="col-span-2 bg-transparent text-sm focus:outline-none" placeholder="150 pies" />
+                    <div className="col-span-1 flex gap-1 justify-center">
+                       <input type="checkbox" checked={spell.c} onChange={() => { const s = [...activeChar.magic.spells]; s[index].c = !s[index].c; updateActiveChar({ magic: { ...activeChar.magic, spells: s } }); }} className="accent-amber-500 w-3 h-3" title="Concentración" />
+                       <input type="checkbox" checked={spell.r} onChange={() => { const s = [...activeChar.magic.spells]; s[index].r = !s[index].r; updateActiveChar({ magic: { ...activeChar.magic, spells: s } }); }} className="accent-amber-500 w-3 h-3" title="Ritual" />
+                       <input type="checkbox" checked={spell.m} onChange={() => { const s = [...activeChar.magic.spells]; s[index].m = !s[index].m; updateActiveChar({ magic: { ...activeChar.magic, spells: s } }); }} className="accent-amber-500 w-3 h-3" title="Material" />
+                    </div>
+                    <input type="text" value={spell.notes} onChange={(e) => { const newSpells = [...activeChar.magic.spells]; newSpells[index].notes = e.target.value; updateActiveChar({ magic: { ...activeChar.magic, spells: newSpells } }); }} className="col-span-3 bg-transparent text-sm focus:outline-none" placeholder="8d6 fuego" />
+                  </div>
+                ))}
+                <button onClick={() => updateActiveChar({ magic: { ...activeChar.magic, spells: [...activeChar.magic.spells, { level: 0, name: '', castTime: '', range: '', c: false, r: false, m: false, notes: '' }] } })} className="text-xs text-amber-500 hover:text-amber-400 mt-2">+ Añadir Conjuro</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: RASGOS Y TRASFONDO */}
+        {activeTab === 'RASGOS' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
+               <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col h-64">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Rasgos de Clase</h3>
+                <textarea value={activeChar.traits.class} onChange={(e) => updateActiveChar({ traits: { ...activeChar.traits, class: e.target.value } })} className="w-full flex-1 bg-transparent text-sm text-slate-300 focus:outline-none resize-none custom-scrollbar" placeholder="Ataque furtivo, Furia, etc..."></textarea>
+               </div>
+               <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col h-48">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Atributos de Especie</h3>
+                <textarea value={activeChar.traits.species} onChange={(e) => updateActiveChar({ traits: { ...activeChar.traits, species: e.target.value } })} className="w-full flex-1 bg-transparent text-sm text-slate-300 focus:outline-none resize-none custom-scrollbar" placeholder="Visión en la oscuridad..."></textarea>
+               </div>
+               <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col h-32">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Dotes</h3>
+                <textarea value={activeChar.traits.feats} onChange={(e) => updateActiveChar({ traits: { ...activeChar.traits, feats: e.target.value } })} className="w-full flex-1 bg-transparent text-sm text-slate-300 focus:outline-none resize-none custom-scrollbar" placeholder="Actor, Alerta..."></textarea>
+               </div>
+            </div>
+            <div className="space-y-4">
+               <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col h-64">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Historia y Personalidad</h3>
+                <textarea value={activeChar.flavor.backstory} onChange={(e) => updateActiveChar({ flavor: { ...activeChar.flavor, backstory: e.target.value } })} className="w-full flex-1 bg-transparent text-sm text-slate-300 focus:outline-none resize-none custom-scrollbar" placeholder="Tu origen..."></textarea>
+               </div>
+               <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Aspecto</h3>
+                <input type="text" value={activeChar.flavor.appearance} onChange={(e) => updateActiveChar({ flavor: { ...activeChar.flavor, appearance: e.target.value } })} className="w-full bg-slate-950 p-2 rounded text-sm text-slate-300 focus:outline-none border border-slate-700" placeholder="Alto, pelo oscuro..." />
+               </div>
+               <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Alineamiento</h3>
+                <input type="text" value={activeChar.alignment} onChange={(e) => updateActiveChar({ alignment: e.target.value })} className="w-full bg-slate-950 p-2 rounded text-sm text-slate-300 focus:outline-none border border-slate-700" placeholder="Caótico Bueno..." />
+               </div>
+               <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col h-32">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Idiomas</h3>
+                <textarea value={activeChar.flavor.languages} onChange={(e) => updateActiveChar({ flavor: { ...activeChar.flavor, languages: e.target.value } })} className="w-full flex-1 bg-transparent text-sm text-slate-300 focus:outline-none resize-none custom-scrollbar" placeholder="Común, Élfico..."></textarea>
+               </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: INVENTARIO Y COMPETENCIAS */}
+        {activeTab === 'INVENTARIO' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-4">Entrenamiento con Equipo</h3>
+                <div className="space-y-4">
+                  <div>
+                    <span className="text-xs text-slate-400 font-bold block mb-2">ARMADURAS</span>
+                    <div className="flex gap-4">
+                      {['light', 'medium', 'heavy', 'shields'].map(armorType => (
+                         <label key={armorType} className="flex items-center gap-1 text-sm cursor-pointer hover:text-slate-300">
+                           <input type="checkbox" checked={activeChar.proficiencies.armor[armorType]} onChange={() => updateActiveChar({ proficiencies: { ...activeChar.proficiencies, armor: { ...activeChar.proficiencies.armor, [armorType]: !activeChar.proficiencies.armor[armorType] } } })} className="accent-amber-500" />
+                           {armorType === 'light' ? 'Ligeras' : armorType === 'medium' ? 'Medias' : armorType === 'heavy' ? 'Pesadas' : 'Escudos'}
+                         </label>
+                      ))}
                     </div>
                   </div>
+                  <div>
+                    <span className="text-xs text-slate-400 font-bold block mb-1">ARMAS</span>
+                    <input type="text" value={activeChar.proficiencies.weapons} onChange={(e) => updateActiveChar({ proficiencies: { ...activeChar.proficiencies, weapons: e.target.value } })} className="w-full bg-slate-950 p-2 rounded text-sm focus:outline-none border border-slate-700" placeholder="Simples, Marciales, Espada larga..." />
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-400 font-bold block mb-1">HERRAMIENTAS</span>
+                    <input type="text" value={activeChar.proficiencies.tools} onChange={(e) => updateActiveChar({ proficiencies: { ...activeChar.proficiencies, tools: e.target.value } })} className="w-full bg-slate-950 p-2 rounded text-sm focus:outline-none border border-slate-700" placeholder="Herramientas de ladrón..." />
+                  </div>
                 </div>
-                
-                <div className="flex flex-col justify-end gap-1">
-                   <button onClick={() => updateActiveChar({ hp: { ...activeChar.hp, current: activeChar.hp.max }, deathSaves: { successes:0, failures:0 } })} className="bg-slate-950 border border-slate-700 hover:bg-slate-800 text-xs text-slate-300 py-1.5 rounded transition-colors">
-                     🏕️ Descanso Largo
-                   </button>
+              </div>
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-4">Monedas</h3>
+                <div className="grid grid-cols-5 gap-2">
+                  {[
+                    { key: 'pc', label: 'PC', color: 'text-amber-700' },
+                    { key: 'pp', label: 'PP', color: 'text-slate-300' },
+                    { key: 'pe', label: 'PE', color: 'text-blue-300' },
+                    { key: 'po', label: 'PO', color: 'text-amber-400' },
+                    { key: 'ppt', label: 'PPT', color: 'text-slate-100' }
+                  ].map(coin => (
+                    <div key={coin.key} className="bg-slate-950 p-2 rounded border border-slate-800 text-center flex flex-col">
+                      <span className={`text-xs font-bold mb-1 ${coin.color}`}>{coin.label}</span>
+                      <input type="number" value={activeChar.inventory.coins[coin.key]} onChange={(e) => updateActiveChar({ inventory: { ...activeChar.inventory, coins: { ...activeChar.inventory.coins, [coin.key]: parseInt(e.target.value)||0 } } })} className="w-full bg-transparent text-lg font-bold text-center focus:outline-none" />
+                    </div>
+                  ))}
                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col h-[400px]">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Equipo</h3>
+                <textarea value={activeChar.inventory.gear} onChange={(e) => updateActiveChar({ inventory: { ...activeChar.inventory, gear: e.target.value } })} className="w-full flex-1 bg-transparent text-sm text-slate-300 focus:outline-none resize-none custom-scrollbar" placeholder="Mochila, cuerda, raciones..."></textarea>
+              </div>
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col h-32">
+                <h3 className="text-sm uppercase text-amber-500 font-bold mb-2">Sintonización con objetos mágicos</h3>
+                <textarea value={activeChar.inventory.attunement} onChange={(e) => updateActiveChar({ inventory: { ...activeChar.inventory, attunement: e.target.value } })} className="w-full flex-1 bg-transparent text-sm text-slate-300 focus:outline-none resize-none custom-scrollbar" placeholder="1. Anillo de protección..."></textarea>
               </div>
             </div>
           </div>
-
-          {/* COLUMNA 3: TEXTOS, ATAQUES E INVENTARIO (Span 4) */}
-          <div className="md:col-span-4 flex flex-col gap-4">
-            <div className="bg-slate-900 rounded-xl border border-slate-800 flex flex-col flex-1 overflow-hidden">
-              <div className="bg-slate-950 p-2 text-center text-xs font-bold text-slate-400 border-b border-slate-800">
-                Ataques y Conjuros
-              </div>
-              <textarea 
-                value={activeChar.attacks}
-                onChange={(e) => updateActiveChar({ attacks: e.target.value })}
-                placeholder="Ej: Cimitarra. +4 Ataque, 1d6+2 Cortante. (Ideal para anotar aquí y tirarlo en Discord)"
-                className="w-full flex-1 bg-transparent text-sm p-4 text-slate-300 focus:outline-none resize-none custom-scrollbar"
-              ></textarea>
-            </div>
-
-            <div className="bg-slate-900 rounded-xl border border-slate-800 flex flex-col flex-1 overflow-hidden">
-              <div className="bg-slate-950 p-2 text-center text-xs font-bold text-slate-400 border-b border-slate-800">
-                Inventario
-              </div>
-              <textarea 
-                value={activeChar.inventory}
-                onChange={(e) => updateActiveChar({ inventory: e.target.value })}
-                placeholder="Oro, pociones, cuerdas, armaduras de repuesto..."
-                className="w-full flex-1 bg-transparent text-sm p-4 text-slate-300 focus:outline-none resize-none custom-scrollbar"
-              ></textarea>
-            </div>
-          </div>
-
-        </div>
+        )}
       </div>
     </div>
   );

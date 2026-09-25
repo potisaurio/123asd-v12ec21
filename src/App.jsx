@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
-export default function AppFichasRol() {
+export default function App() {
   const [rol, setRol] = useState('JUGADOR');
   const [pestanaActiva, setPestanaActiva] = useState('PRINCIPAL');
   
@@ -33,7 +33,6 @@ export default function AppFichasRol() {
     setPersonaje({ ...personaje, hpActual: nuevoHp });
     setInputDanio('');
 
-    // Animaciones limpias y fluidas sin sonido
     if (esCuracion) {
       setAnimacion('bg-emerald-900/40 scale-[1.02] transition-all duration-300');
     } else {
